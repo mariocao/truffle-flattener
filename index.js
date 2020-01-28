@@ -12,6 +12,8 @@ const mkdirp = require("mkdirp");
 const Resolver = require("@resolver-engine/imports-fs").ImportsFsEngine;
 
 const IMPORT_SOLIDITY_REGEX = /^\s*import(\s+).*$/gm;
+const VERSION_SOLIDITY_REGEX = /^pragma solidity .*;$/gm;
+const EXPERIMENTAL_SOLIDITY_REGEX = /^pragma experimental .*;$/gm;
 
 function unique(array) {
   return [...new Set(array)];
@@ -107,11 +109,19 @@ async function getSortedFilePaths(entryPoints, truffleRoot) {
   return files;
 }
 
-async function printFileWithoutImports(filePath, log) {
-  const resolved = await resolve(filePath);
-  const output = resolved.fileContents.replace(IMPORT_SOLIDITY_REGEX, "");
+async function cleanFile(filePath) {
+  const contents = (await resolve(filePath)).fileContents;
 
-  log(output.trim());
+  const version = contents.match(VERSION_SOLIDITY_REGEX) || [];
+  const experimentals = contents.match(EXPERIMENTAL_SOLIDITY_REGEX) || [];
+
+  const clean = contents
+    .replace(IMPORT_SOLIDITY_REGEX, "")
+    .replace(VERSION_SOLIDITY_REGEX, "")
+    .replace(EXPERIMENTAL_SOLIDITY_REGEX, "")
+    .trim();
+
+  return [clean, version, experimentals];
 }
 
 function fileNameToGlobalName(fileName, truffleRoot) {
@@ -125,11 +135,22 @@ function fileNameToGlobalName(fileName, truffleRoot) {
   return globalName;
 }
 
-async function printContactenation(files, log) {
-  for (const file of files) {
-    log("\n// File: " + file + "\n");
-    await printFileWithoutImports(file, log);
+async function printConcatenation(files, log) {
+  let cleanFiles = await Promise.all(files.map(cleanFile));
+
+  let [output, versions, experimentals] = cleanFiles.reduce(([output_acc, versions_acc, experimentals_acc], [output, versions, experimentals], i) =>[
+    `${output_acc}\n// File: ${files[i]}\n${output}`,
+    [...versions_acc, ...versions],
+    [...experimentals_acc, ...experimentals]
+  ], ["", [], []])
+
+  if (versions.length > 0) {
+    log(versions[0]);
   }
+
+  unique(experimentals).forEach(log);
+
+  log(output)
 }
 
 async function getTruffleRoot() {
@@ -171,7 +192,7 @@ async function flatten(filePaths, log, root) {
     filePathsFromTruffleRoot,
     truffleRoot
   );
-  await printContactenation(sortedFiles, log);
+  await printConcatenation(sortedFiles, log);
 
   process.chdir(wd);
 }
