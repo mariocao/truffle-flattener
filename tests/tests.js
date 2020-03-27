@@ -63,7 +63,7 @@ describe("flattening", function() {
     }
   });
 
-  it("Should leave multiple solidity pragmas", async function() {
+  it("Should filter multiple solidity pragmas", async function() {
     const flattened = await flatten([
       "./contracts/child.sol",
       "./contracts/child.sol",
@@ -71,8 +71,8 @@ describe("flattening", function() {
     ]);
 
     assert.include(flattened, "pragma solidity ^0.5.0;");
-    assert.include(flattened, "pragma solidity >=0.4.24 <0.6.0;");
-    assert.include(flattened, "pragma solidity ^0.5.2;");
+    assert.notInclude(flattened, "pragma solidity >=0.4.24 <0.6.0;");
+    assert.notInclude(flattened, "pragma solidity ^0.5.2;");
   });
 
   it("Should fail if the provided root directory does not exist", async function() {
